@@ -18,7 +18,12 @@ def index():
 def cm():
     args = request.args
 
-    cmnd = args.get("cmnd").lower()
+    cmnd = args.get("cmnd")
+
+    if not cmnd:
+        return Response("No command provided!", status=400)
+
+    cmnd = cmnd.lower()
 
     if cmnd == "status 0":
         return status_template("sample", request.host.split(":")[0], instance)

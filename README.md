@@ -17,7 +17,7 @@ poetry run flask --app server run --host 0.0.0.0 --port 5000
  ## Spawn multiple
 
  ```bash
- ./scripts/spawn-devices.sh <instances>
+ ./scripts/spawn-devices.py <num-instances>
 ```
 
 [0]: https://github.com/arendst/Tasmota
