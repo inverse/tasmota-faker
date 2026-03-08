@@ -5,8 +5,10 @@ import signal
 import subprocess
 import sys
 import time
+from pathlib import Path
 
 DEFAULT_NUM_INSTANCES = 3
+PID_FILE = Path(".server-pids")
 
 
 def usage():
@@ -18,6 +20,13 @@ def usage():
 
 def is_valid_num(num) -> bool:
     return num.isdigit() and int(num) > 0
+
+
+def read_pid_file() -> list:
+    if not PID_FILE.exists():
+        return []
+    with PID_FILE.open() as f:
+        return [line.strip() for line in f if line.strip()]
 
 
 def start_flask_instance(i, port) -> subprocess.Popen:
@@ -39,6 +48,8 @@ def start_flask_instance(i, port) -> subprocess.Popen:
         env=env,
     )
     print(f"  PID: {proc.pid}")
+    with PID_FILE.open("a") as f:
+        f.write(f"{proc.pid}\n")
     return proc
 
 
@@ -49,23 +60,53 @@ def kill_flask_instances(procs: list):
 
     print("Killing Flask instances...")
     for proc in procs:
+        pid = str(proc.pid)
+        killed = False
         if proc.poll() is None:
-            print(f"Process with PID {proc.pid} is running. Attempting to terminate.")
+            print(f"Process with PID {pid} is running. Attempting to terminate.")
             proc.terminate()
             time.sleep(1)
             if proc.poll() is None:
-                print(
-                    f"Process with PID {proc.pid} did not terminate. Sending SIGKILL."
-                )
+                print(f"Process with PID {pid} did not terminate. Sending SIGKILL.")
                 proc.kill()
+                time.sleep(1)
+                if proc.poll() is None:
+                    print(f"Process with PID {pid} could not be killed.")
+                else:
+                    print(f"Process with PID {pid} killed.")
+                    killed = True
             else:
-                print(f"Process with PID {proc.pid} terminated.")
+                print(f"Process with PID {pid} terminated.")
+                killed = True
         else:
-            print(f"Process with PID {proc.pid} is not running.")
+            print(f"Process with PID {pid} is not running.")
+            killed = True
+
+        if killed and PID_FILE.exists():
+            pids = read_pid_file()
+            pids = [p for p in pids if p != pid]
+            if pids:
+                with PID_FILE.open("w") as f:
+                    for p in pids:
+                        f.write(f"{p}\n")
+            else:
+                PID_FILE.unlink()
     print("Flask instances killed.")
 
 
 def main():
+    if PID_FILE.exists():
+        with PID_FILE.open() as f:
+            pids = [line.strip() for line in f if line.strip()]
+        if len(pids) > 0:
+            print(
+                f"WARNING: {PID_FILE} is not empty. Previous server PIDs may still be running:"
+            )
+            for pid in pids:
+                print(f"  PID: {pid}")
+            print("Ensure they are stopped and remove this file after")
+            sys.exit(0)
+
     num_instances = (
         int(sys.argv[1])
         if len(sys.argv) > 1 and is_valid_num(sys.argv[1])
